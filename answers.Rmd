@@ -1,0 +1,136 @@
+---
+title: "Application Questions"
+author: "Wes Poulsen"
+date: "2022-07-14"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,message=FALSE}
+library(tidyverse)
+library(knitr)
+```
+
+# NBA 2015-2016 Season
+
+## Read the data from [basketball reference](https://www.basketball-reference.com/leagues/NBA_2016_totals.html)
+This data is aggregated for the entire season. The level of grain is player and team; if a player was traded to a different team midseason there will be a value in the team column of `TOT` which is an aggregate for that player's whole year. Those values will be removed to not double count stats
+
+```{r,message=FALSE,warning=FALSE}
+nba <- read_csv("season.csv") ## downloaded from basketball reference
+```
+
+
+## Clean Data 
+
+- Clean the column names to exclude weird characters like '%' 
+- Exclude `TOT` values to not over count players' stats
+
+```{r}
+nba_clean <- nba |> 
+  rename_at(vars(contains("%")),~str_replace(.,"%","_percent")) |> ## replace the % sign with "percent" label
+  filter(Tm != 'TOT') ## remove the TOT team because that aggregates data based on if a player was traded
+```
+
+## Question 1 
+
+**Which player played the third most minutes (MP) across the entire season, and how many minutes did he play?**
+
+```{r}
+nba_clean |> 
+  group_by(Player) |>  ## select the player and minutes played column
+  summarise(total_minutes_played = sum(MP)) |> 
+  arrange(desc(total_minutes_played)) |>  ## sort by minutes played
+  slice(1:5) |>  #3 select the top row
+  kable() 
+```
+#### Answer 
+*James Harden, with 3,125 minutes played. I grouped the data by player and summed the minutes played, then sorted in descending order to get the player who played the most*
+
+## Question 2
+
+**Which team had the highest number of assists (AST) across all of its players?**
+
+
+```{r}
+nba_clean |> 
+  group_by(Tm) |> 
+  summarise(total_assists = sum(AST)) |> 
+  arrange(desc(total_assists)) |> 
+  slice(1:5) |> 
+  kable()
+```
+
+#### Answer 
+*GSW -> Golden State had the most assists with 2,373. I reached this by grouping the data by team and summing the total number of assists then sorted the results in descending order.*
+
+
+## Question 3
+
+**Which team (TM) had the highest number of players that scored over 750 points (PTS) on the season?**
+
+```{r}
+nba_clean |> 
+  filter(PTS > 750) |> 
+  group_by(Tm) |> 
+  summarise(n_players = n_distinct(Player)) |> 
+  arrange(desc(n_players)) |> 
+  slice(1:5) |> 
+  kable()
+```
+#### Answer
+*Dallas, Denver, and Minnesota each had 6 players that scored over 750 points that season. I reached this by filtering to players who scored more than 750 points, then grouping by the team to then count the number of players with more than 750*
+
+
+## Question 4 
+
+**Which player scored the highest percentage of his team's total points (PTS)?**
+
+```{r}
+nba_clean |> 
+  group_by(Tm) |> 
+  mutate(total_points = sum(PTS)) |> 
+  ungroup() |> 
+  mutate(pct_of_points = PTS/total_points) |> 
+  arrange(desc(pct_of_points)) |> 
+  select(Player,PTS,total_points,pct_of_points) |> 
+  slice(1:5) |> 
+  kable()
+```
+#### Answer
+*James Harden had that highest percentage of his team's total points. I reached this by using a window function to get the total per team, then got the ratio of each player to team's total points, then sorted in descending order*
+
+
+## Question 5 
+
+**Among players with at least 20 3-point field goal attempts (3PA), which player's 3-point field goal percentage (3P%) was the furthest from the average 3-point field goal percentage of their position (POS)? What was the difference?**
+
+```{r}
+nba_clean |> 
+  filter(`3PA` > 20) |> 
+  group_by(Pos) |>  ## group by position
+  mutate(position_avg = mean(`3P_percent`)) |>  ## window function to take the total average by position
+  ungroup() |> 
+  mutate(delta_from_avg = position_avg - `3P_percent`) |>  ## find the delta value
+  arrange(desc(delta_from_avg)) |> 
+  select(Player,`3PA`,`3P_percent`,position_avg,delta_from_avg,Pos) |> 
+  slice(1:5)  |> 
+  kable()
+```
+#### Answer
+The player with largest discrepancy between their three point percentage versus their position average was Dwayne Wade, who was 0.19 below the average of 0.35. I arrived at this by:
+
+  - Filtering the data set to only include players who shot more than 20 three point shots
+  - Grouping by position and applying a window function to get the total average by position
+  - Finding the difference for each player of their three point percentage versus their position average
+  - Sorting the results of the difference in descending order
+
+
+
+
